@@ -45,6 +45,7 @@ type Model struct {
 	Search       string
 	Width        int
 	Height       int
+	ScrollOffset int
 }
 
 func main() {
@@ -53,6 +54,7 @@ func main() {
 		CurrentState: models.StateIdle,
 		ActiveModule: 0,
 		Search:       "",
+		ScrollOffset: 0,
 	}
 	p := tea.NewProgram(&m)
 	if _, err := p.Run(); err != nil {
@@ -70,11 +72,12 @@ func (model *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
 		switch msg.String() {
-		case "ctrl+q":
+		case "ctrl+c", "q", "esc":
 			return model, tea.Quit
 		case "tab":
 			model.ActiveTab = (model.ActiveTab + 1) % models.TabCount
 			model.ActiveModule = 0
+			model.Result.Data = nil
 			return model, nil
 		case "backspace":
 			if len(model.Search) > 0 {
@@ -83,16 +86,29 @@ func (model *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return model, nil
 		case "down":
 			model.ActiveModule = (model.ActiveModule + 1) % len(currentModules)
+			model.Result.Data = nil
 			return model, nil
 		case "up":
 			if model.ActiveModule > 0 {
 				model.ActiveModule -= 1
+				model.Result.Data = nil
 			} else {
 				model.ActiveModule = len(currentModules) - 1
+				model.Result.Data = nil
 			}
 			return model, nil
 		case "enter":
 			model.Result = conductor.Search(model.Search, model.ActiveTab, model.ActiveModule)
+			return model, nil
+		case "ctrl+down":
+			if model.ScrollOffset < len(model.Result.Order) {
+				model.ScrollOffset++
+			}
+			return model, nil
+		case "ctrl+up":
+			if model.ScrollOffset > 0 {
+				model.ScrollOffset--
+			}
 			return model, nil
 		default:
 			if msg.Text != "" {
@@ -136,7 +152,7 @@ func renderSearchBar(search string, width int) string {
 	return searchText
 }
 
-func renderMainArea(width int, height int, modules []string, activeModule int, data map[string]string) string {
+func renderMainArea(width int, height int, modules []string, activeModule int, data map[string]string, order []string, offset int) string {
 	var lines []string
 	var resultLine []string
 	var style string
@@ -149,13 +165,17 @@ func renderMainArea(width int, height int, modules []string, activeModule int, d
 		lines = append(lines, style)
 	}
 
-	for key, value := range data {
-		line := key + ": " + value
+	for _, val := range order {
+		line := val + ": " + data[val]
 		resultLine = append(resultLine, line)
 	}
 
+	if offset < len(resultLine) {
+		resultLine = resultLine[offset:]
+	}
+
 	leftColumn := mainSectionStyle.Width((width / 4) - 2).Height(height - 4).Render("\n" + strings.Join(lines, "\n\n"))
-	rightColumn := mainSectionStyle.Width((width * 3 / 4) - 2).Height(height - 4).Render("Results\n\n" + strings.Join(resultLine, "\n\n"))
+	rightColumn := mainSectionStyle.Width((width * 3 / 4) - 2).Height(height - 4).Render("Results\n\n\t" + strings.Join(resultLine, "\n\t"))
 
 	return lipgloss.JoinHorizontal(lipgloss.Top, leftColumn, rightColumn)
 }
@@ -166,7 +186,8 @@ func (model *Model) View() tea.View {
 
 	ui := renderHeader(model.ActiveTab, model.Width)
 	searchBar := renderSearchBar(model.Search, model.Width)
-	mainArea := renderMainArea(model.Width, model.Height, currentModules, model.ActiveModule, model.Result.Data)
+	mainArea := renderMainArea(model.Width, model.Height, currentModules, model.ActiveModule, model.Result.Data, model.Result.Order, model.ScrollOffset)
 	v := tea.NewView(ui + "\n" + searchBar + "\n" + mainArea)
+	v.AltScreen = true
 	return v
 }

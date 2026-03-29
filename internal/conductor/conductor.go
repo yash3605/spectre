@@ -2,20 +2,13 @@ package conductor
 
 import (
 	"github.com/yash3605/spectre/internal/models"
+	"github.com/yash3605/spectre/modules/osint"
 )
 
 func Search(query string, activeTab models.Tab, activeModule int) models.Result {
 	switch activeTab {
 	case models.OSINT:
-		return models.Result{
-			Title: "IP lookup",
-			Data: map[string]string{
-				"IP":      query,
-				"Status":  "test",
-				"Country": "India",
-			},
-			Status: models.StateIdle,
-		}
+		return osint.IPLookup(query, activeModule)
 	case models.Infosys:
 		return models.Result{
 			Title:  "Science",

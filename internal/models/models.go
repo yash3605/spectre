@@ -20,5 +20,6 @@ const (
 type Result struct {
 	Title  string
 	Data   map[string]string
+	Order  []string
 	Status State
 }
